@@ -13,3 +13,196 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// User model for Better Auth integration
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  householdMembers  HouseholdMember[]
+  recipes           Recipe[]
+  createdHouseholds Household[]       @relation("HouseholdCreator")
+
+  @@map("users")
+}
+
+// Household management models
+model Household {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  creatorId   String
+
+  // Relationships
+  creator      User               @relation("HouseholdCreator", fields: [creatorId], references: [id])
+  members      HouseholdMember[]
+  inventory    InventoryItem[]
+  shoppingList ShoppingListItem[]
+  mealPlans    MealPlan[]
+  invites      HouseholdInvite[]
+
+  @@map("households")
+}
+
+model HouseholdMember {
+  id          String        @id @default(cuid())
+  role        HouseholdRole @default(MEMBER)
+  joinedAt    DateTime      @default(now())
+  userId      String
+  householdId String
+
+  // Relationships
+  user      User      @relation(fields: [userId], references: [id])
+  household Household @relation(fields: [householdId], references: [id])
+
+  @@unique([userId, householdId])
+  @@map("household_members")
+}
+
+model HouseholdInvite {
+  id          String        @id @default(cuid())
+  email       String
+  role        HouseholdRole @default(MEMBER)
+  status      InviteStatus  @default(PENDING)
+  createdAt   DateTime      @default(now())
+  expiresAt   DateTime
+  householdId String
+
+  // Relationships
+  household Household @relation(fields: [householdId], references: [id])
+
+  @@map("household_invites")
+}
+
+// Inventory management models
+model InventoryItem {
+  id          String    @id @default(cuid())
+  name        String
+  quantity    Float
+  unit        String
+  category    String
+  expiryDate  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  householdId String
+
+  // Relationships
+  household         Household          @relation(fields: [householdId], references: [id])
+  recipeIngredients RecipeIngredient[]
+
+  @@map("inventory_items")
+}
+
+model ShoppingListItem {
+  id          String   @id @default(cuid())
+  name        String
+  quantity    Float?
+  unit        String?
+  category    String?
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  householdId String
+
+  // Relationships
+  household Household @relation(fields: [householdId], references: [id])
+
+  @@map("shopping_list_items")
+}
+
+// Recipe management models
+model Recipe {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  instructions String
+  prepTime     Int? // minutes
+  cookTime     Int? // minutes
+  servings     Int?
+  tags         String[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  creatorId    String
+
+  // Relationships
+  creator       User               @relation(fields: [creatorId], references: [id])
+  ingredients   RecipeIngredient[]
+  mealPlanItems MealPlanItem[]
+
+  @@map("recipes")
+}
+
+model RecipeIngredient {
+  id              String  @id @default(cuid())
+  quantity        Float
+  unit            String
+  notes           String?
+  recipeId        String
+  inventoryItemId String?
+
+  // Relationships
+  recipe        Recipe         @relation(fields: [recipeId], references: [id])
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+
+  @@map("recipe_ingredients")
+}
+
+// Meal planning models
+model MealPlan {
+  id          String   @id @default(cuid())
+  weekStart   DateTime
+  weekEnd     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  householdId String
+
+  // Relationships
+  household Household      @relation(fields: [householdId], references: [id])
+  meals     MealPlanItem[]
+
+  @@map("meal_plans")
+}
+
+model MealPlanItem {
+  id         String    @id @default(cuid())
+  date       DateTime
+  mealType   MealType
+  cooked     Boolean   @default(false)
+  cookedAt   DateTime?
+  notes      String?
+  mealPlanId String
+  recipeId   String?
+
+  // Relationships
+  mealPlan MealPlan @relation(fields: [mealPlanId], references: [id])
+  recipe   Recipe?  @relation(fields: [recipeId], references: [id])
+
+  @@map("meal_plan_items")
+}
+
+// Enums
+enum HouseholdRole {
+  ADMIN
+  MEMBER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
