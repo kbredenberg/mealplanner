@@ -20,7 +20,7 @@
   - Add role-based access control for household operations
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
-- [ ] 4. Create inventory management API endpoints
+- [x] 4. Create inventory management API endpoints
   - Implement inventory item CRUD operations with categories and units
   - Create inventory search and filtering endpoints
   - Add inventory item quantity update endpoints
