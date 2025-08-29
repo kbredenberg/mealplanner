@@ -41,7 +41,7 @@ model Household {
   creatorId   String
 
   // Relationships
-  creator      User               @relation("HouseholdCreator", fields: [creatorId], references: [id])
+  creator      User               @relation("HouseholdCreator", fields: [creatorId], references: [id], onDelete: Restrict)
   members      HouseholdMember[]
   inventory    InventoryItem[]
   shoppingList ShoppingListItem[]
@@ -59,8 +59,8 @@ model HouseholdMember {
   householdId String
 
   // Relationships
-  user      User      @relation(fields: [userId], references: [id])
-  household Household @relation(fields: [householdId], references: [id])
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
   @@unique([userId, householdId])
   @@map("household_members")
@@ -76,7 +76,7 @@ model HouseholdInvite {
   householdId String
 
   // Relationships
-  household Household @relation(fields: [householdId], references: [id])
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
   @@map("household_invites")
 }
@@ -94,7 +94,7 @@ model InventoryItem {
   householdId String
 
   // Relationships
-  household         Household          @relation(fields: [householdId], references: [id])
+  household         Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
   recipeIngredients RecipeIngredient[]
 
   @@map("inventory_items")
@@ -112,7 +112,7 @@ model ShoppingListItem {
   householdId String
 
   // Relationships
-  household Household @relation(fields: [householdId], references: [id])
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
   @@map("shopping_list_items")
 }
@@ -132,7 +132,7 @@ model Recipe {
   creatorId    String
 
   // Relationships
-  creator       User               @relation(fields: [creatorId], references: [id])
+  creator       User               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   ingredients   RecipeIngredient[]
   mealPlanItems MealPlanItem[]
 
@@ -164,7 +164,7 @@ model MealPlan {
   householdId String
 
   // Relationships
-  household Household      @relation(fields: [householdId], references: [id])
+  household Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
   meals     MealPlanItem[]
 
   @@map("meal_plans")

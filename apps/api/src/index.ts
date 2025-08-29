@@ -5,6 +5,7 @@ import { logger } from "hono/logger";
 import { auth } from "./lib/auth.js";
 import { authRoutes } from "./routes/auth.js";
 import { userRoutes } from "./routes/user.js";
+import { householdRoutes } from "./routes/households.js";
 import "./lib/hono-types.js";
 
 const app = new Hono();
@@ -36,6 +37,9 @@ app.route("/api/auth", authRoutes);
 // User management routes
 app.route("/api/user", userRoutes);
 
+// Household management routes
+app.route("/api/households", householdRoutes);
+
 // Health check
 app.get("/", (c) => {
   return c.json({ message: "Meal Planner API is running!" });
@@ -65,5 +69,8 @@ serve(
     console.log(`📊 Health check: http://localhost:${info.port}/api/health`);
     console.log(`🔐 Better Auth: http://localhost:${info.port}/api/auth/*`);
     console.log(`👤 User routes: http://localhost:${info.port}/api/user/*`);
+    console.log(
+      `🏠 Household routes: http://localhost:${info.port}/api/households/*`
+    );
   }
 );

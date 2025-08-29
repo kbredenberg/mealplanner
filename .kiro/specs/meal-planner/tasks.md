@@ -13,7 +13,7 @@
   - Create user profile management endpoints
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 3. Build household management API endpoints
+- [x] 3. Build household management API endpoints
   - Implement household CRUD operations (create, read, update, delete)
   - Create household member management endpoints (add, remove, list members)
   - Implement household invitation system with email invites
