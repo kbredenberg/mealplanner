@@ -10,6 +10,7 @@ import { householdRoutes } from "./routes/households.js";
 import { inventoryRoutes } from "./routes/inventory.js";
 import { shoppingListRoutes } from "./routes/shopping-list.js";
 import { recipeRoutes } from "./routes/recipes.js";
+import { mealPlanRoutes } from "./routes/meal-plans.js";
 import { wsManager } from "./lib/websocket.js";
 import "./lib/hono-types.js";
 
@@ -53,6 +54,9 @@ app.route("/api/households", shoppingListRoutes);
 
 // Recipe management routes
 app.route("/api/recipes", recipeRoutes);
+
+// Meal planning routes
+app.route("/api/households", mealPlanRoutes);
 
 // Health check
 app.get("/", (c) => {
@@ -101,6 +105,9 @@ serve(
     );
     console.log(
       `🍳 Recipe routes: http://localhost:${info.port}/api/recipes/*`
+    );
+    console.log(
+      `📅 Meal plan routes: http://localhost:${info.port}/api/households/:id/meal-plans/*`
     );
     console.log(`🔌 WebSocket server: ws://localhost:${info.port}/ws`);
   }

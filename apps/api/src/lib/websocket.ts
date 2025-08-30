@@ -34,6 +34,13 @@ export interface WebSocketEvents {
     householdId: string;
     member: any;
   };
+  "meal-plan:updated": {
+    householdId: string;
+    mealPlanId: string;
+    meal?: any;
+    mealId?: string;
+    action: "added" | "updated" | "deleted" | "cooked";
+  };
 }
 
 export type WebSocketEventType = keyof WebSocketEvents;
