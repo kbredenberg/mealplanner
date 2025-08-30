@@ -34,7 +34,7 @@
   - Implement shopping list to inventory conversion functionality
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
 
-- [ ] 6. Implement recipe management API endpoints
+- [x] 6. Implement recipe management API endpoints
   - Create recipe CRUD operations with ingredients and instructions
   - Implement recipe search functionality by name, ingredients, and tags
   - Add recipe sharing within households
