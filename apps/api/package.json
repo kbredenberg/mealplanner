@@ -15,9 +15,11 @@
   "dependencies": {
     "@hono/node-server": "^1.19.0",
     "@prisma/client": "^6.15.0",
+    "@types/ws": "^8.18.1",
     "better-auth": "^1.3.7",
     "hono": "^4.9.5",
-    "prisma": "^6.15.0"
+    "prisma": "^6.15.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^20.11.17",

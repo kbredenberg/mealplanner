@@ -1,4 +1,5 @@
 import { serve } from "@hono/node-server";
+import { createServer } from "http";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -7,6 +8,8 @@ import { authRoutes } from "./routes/auth.js";
 import { userRoutes } from "./routes/user.js";
 import { householdRoutes } from "./routes/households.js";
 import { inventoryRoutes } from "./routes/inventory.js";
+import { shoppingListRoutes } from "./routes/shopping-list.js";
+import { wsManager } from "./lib/websocket.js";
 import "./lib/hono-types.js";
 
 const app = new Hono();
@@ -44,6 +47,9 @@ app.route("/api/households", householdRoutes);
 // Inventory management routes
 app.route("/api/households", inventoryRoutes);
 
+// Shopping list management routes
+app.route("/api/households", shoppingListRoutes);
+
 // Health check
 app.get("/", (c) => {
   return c.json({ message: "Meal Planner API is running!" });
@@ -63,10 +69,17 @@ app.get("/api/health", (c) => {
 
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
+// Create HTTP server for both Hono and WebSocket
+const server = createServer();
+
+// Initialize WebSocket server
+wsManager.initialize(server);
+
 serve(
   {
     fetch: app.fetch,
     port,
+    createServer: () => server,
   },
   (info) => {
     console.log(`🚀 Server is running on http://localhost:${info.port}`);
@@ -79,5 +92,9 @@ serve(
     console.log(
       `📦 Inventory routes: http://localhost:${info.port}/api/households/:id/inventory/*`
     );
+    console.log(
+      `🛒 Shopping list routes: http://localhost:${info.port}/api/households/:id/shopping-list/*`
+    );
+    console.log(`🔌 WebSocket server: ws://localhost:${info.port}/ws`);
   }
 );

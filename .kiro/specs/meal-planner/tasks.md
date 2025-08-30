@@ -27,7 +27,7 @@
   - Implement inventory categorization and unit management
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
 
-- [ ] 5. Build shopping list API endpoints with real-time features
+- [x] 5. Build shopping list API endpoints with real-time features
   - Implement shopping list CRUD operations
   - Create real-time WebSocket events for shopping list updates
   - Add shopping list item completion and synchronization
