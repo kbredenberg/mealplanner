@@ -72,14 +72,25 @@ export function useApi() {
       body: data ? JSON.stringify(data) : undefined,
     });
 
+  const patch = (endpoint: string, data?: any, options?: ApiOptions) =>
+    makeRequest(endpoint, {
+      ...options,
+      method: "PATCH",
+      body: data ? JSON.stringify(data) : undefined,
+    });
+
   const del = (endpoint: string, options?: ApiOptions) =>
     makeRequest(endpoint, { ...options, method: "DELETE" });
+
+  const getBaseUrl = () => API_BASE_URL;
 
   return {
     get,
     post,
     put,
+    patch,
     delete: del,
     makeRequest,
+    getBaseUrl,
   };
 }
