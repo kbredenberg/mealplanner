@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Text,
   RefreshControl,
-  Alert,
 } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -36,7 +35,7 @@ export default function InventoryScreen() {
     if (currentHousehold) {
       loadInventory();
     }
-  }, [currentHousehold]);
+  }, [currentHousehold, loadInventory]);
 
   const handleRefresh = async () => {
     if (currentHousehold) {

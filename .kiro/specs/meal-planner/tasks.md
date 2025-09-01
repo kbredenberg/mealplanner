@@ -76,7 +76,7 @@
   - Build add items to shopping list interface
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 8.1, 8.2, 8.3_
 
-- [ ] 12. Create recipe management mobile screens
+- [x] 12. Create recipe management mobile screens
   - Build recipe list and search interface
   - Implement recipe detail view with ingredients and instructions
   - Create recipe creation and editing forms
