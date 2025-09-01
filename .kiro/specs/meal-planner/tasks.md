@@ -62,7 +62,7 @@
   - Add household member list and role management UI
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 8.1, 8.2, 8.3_
 
-- [ ] 10. Implement inventory management mobile interface
+- [x] 10. Implement inventory management mobile interface
   - Create inventory list screen with category filtering
   - Build add/edit inventory item forms with unit selection
   - Implement inventory search and filtering functionality
