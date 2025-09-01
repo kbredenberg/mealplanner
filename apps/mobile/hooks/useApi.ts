@@ -19,9 +19,8 @@ export function useApi() {
     };
 
     // Add authorization header if session exists and auth is required
-    if (requireAuth && session?.token) {
-      headers.Authorization = `Bearer ${session.token}`;
-    }
+    // Better Auth handles authentication via cookies, so we don't need to manually add tokens
+    // The session is used for client-side state management only
 
     try {
       const response = await fetch(url, {
@@ -35,10 +34,7 @@ export function useApi() {
         // Retry the request with refreshed session
         const retryResponse = await fetch(url, {
           ...fetchOptions,
-          headers: {
-            ...headers,
-            Authorization: session?.token ? `Bearer ${session.token}` : "",
-          },
+          headers,
         });
 
         if (!retryResponse.ok) {

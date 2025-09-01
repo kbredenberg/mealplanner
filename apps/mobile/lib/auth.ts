@@ -1,8 +1,8 @@
-import { betterAuth } from "better-auth/react";
+import { createAuthClient } from "better-auth/client";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
 
-export const authClient = betterAuth({
+export const authClient = createAuthClient({
   baseURL: API_BASE_URL,
   plugins: [],
   fetchOptions: {
@@ -14,7 +14,7 @@ export const authClient = betterAuth({
       console.log("Auth request:", context.url);
     },
     onSuccess(context) {
-      console.log("Auth request successful:", context.url);
+      console.log("Auth request successful");
     },
   },
 });

@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import * as SecureStore from "expo-secure-store";
-import { authClient, Session, User } from "@/lib/auth";
+import { authClient } from "@/lib/auth";
+
+type Session = typeof authClient.$Infer.Session;
+type User = Session["user"];
 
 interface AuthContextType {
   session: Session | null;
@@ -91,11 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (data && !error) {
-        setSession(data.session);
-        await SecureStore.setItemAsync(
-          SESSION_KEY,
-          JSON.stringify(data.session)
-        );
+        setSession(data);
+        await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(data));
         return { success: true };
       } else {
         return { success: false, error: error?.message || "Sign in failed" };
@@ -123,11 +123,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (data && !error) {
-        setSession(data.session);
-        await SecureStore.setItemAsync(
-          SESSION_KEY,
-          JSON.stringify(data.session)
-        );
+        setSession(data);
+        await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(data));
         return { success: true };
       } else {
         return { success: false, error: error?.message || "Sign up failed" };
