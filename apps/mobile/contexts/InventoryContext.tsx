@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useApi } from "@/hooks/useApi";
+import { useOfflineApi } from "@/hooks/useOfflineApi";
 import { useHousehold } from "@/contexts/HouseholdContext";
+import { syncManager, SyncConflict } from "@/lib/syncManager";
+import { storage } from "@/lib/storage";
 
 export interface InventoryItem {
   id: string;
@@ -26,6 +29,9 @@ interface InventoryContextType {
   error: string | null;
   searchQuery: string;
   selectedCategory: string | null;
+  isOnline: boolean;
+  pendingOperations: number;
+  conflicts: SyncConflict[];
 
   // Data management
   loadInventory: () => Promise<void>;
@@ -48,6 +54,14 @@ interface InventoryContextType {
   ) => Promise<{ success: boolean; error?: string }>;
   deleteItem: (id: string) => Promise<{ success: boolean; error?: string }>;
 
+  // Offline support
+  syncData: () => Promise<void>;
+  resolveConflict: (
+    conflictId: string,
+    resolution: "local" | "server" | "merge"
+  ) => Promise<void>;
+  clearOfflineData: () => Promise<void>;
+
   // Filtering and search
   setSearchQuery: (query: string) => void;
   setSelectedCategory: (category: string | null) => void;
@@ -65,16 +79,35 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [pendingOperations, setPendingOperations] = useState(0);
+  const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
 
   const api = useApi();
+  const offlineApi = useOfflineApi();
   const { currentHousehold } = useHousehold();
+  const { isOnline } = offlineApi;
 
   // Load inventory when household changes
   useEffect(() => {
     if (currentHousehold) {
       loadInventory();
+      updatePendingOperationsCount();
     }
   }, [currentHousehold]);
+
+  // Update pending operations count when online status changes
+  useEffect(() => {
+    updatePendingOperationsCount();
+  }, [isOnline]);
+
+  const updatePendingOperationsCount = async () => {
+    try {
+      const count = await offlineApi.getPendingOperationsCount();
+      setPendingOperations(count);
+    } catch (error) {
+      console.error("Error getting pending operations count:", error);
+    }
+  };
 
   const loadInventory = async () => {
     if (!currentHousehold) return;
@@ -83,14 +116,22 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       setError(null);
 
-      const response = await api.get(
-        `/api/households/${currentHousehold.id}/inventory`
+      const cacheKey = `inventory_${currentHousehold.id}`;
+      const response = await offlineApi.get(
+        `/api/households/${currentHousehold.id}/inventory`,
+        { cacheKey, cacheMaxAge: 2 * 60 * 1000 } // 2 minutes cache
       );
       const data = await response.json();
 
       if (data.success) {
-        setItems(data.data || []);
-        updateCategories(data.data || []);
+        const inventoryData = data.data || [];
+        setItems(inventoryData);
+        updateCategories(inventoryData);
+
+        // If this was from cache, try to sync in the background
+        if ((response as any).fromCache && isOnline) {
+          syncData();
+        }
       } else {
         setError(data.error || "Failed to load inventory");
       }
@@ -132,14 +173,34 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       setError(null);
 
-      const response = await api.post(
+      const response = await offlineApi.post(
         `/api/households/${currentHousehold.id}/inventory`,
-        data
+        data,
+        { enableOptimisticUpdates: true }
       );
       const result = await response.json();
 
       if (result.success) {
-        await loadInventory(); // Reload inventory to get the new item
+        // For optimistic updates, immediately add the item to local state
+        if ((response as any).pending) {
+          const optimisticItem: InventoryItem = {
+            id: result.data.id,
+            name: data.name,
+            quantity: data.quantity,
+            unit: data.unit,
+            category: data.category,
+            expiryDate: data.expiryDate,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            householdId: currentHousehold.id,
+          };
+
+          setItems((prev) => [optimisticItem, ...prev]);
+          updateCategories([optimisticItem, ...items]);
+          await updatePendingOperationsCount();
+        } else {
+          await loadInventory(); // Reload inventory to get the new item
+        }
         return { success: true };
       } else {
         return {
@@ -173,14 +234,27 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       setError(null);
 
-      const response = await api.put(
+      const response = await offlineApi.put(
         `/api/households/${currentHousehold.id}/inventory/${id}`,
-        data
+        data,
+        { enableOptimisticUpdates: true }
       );
       const result = await response.json();
 
       if (result.success) {
-        await loadInventory(); // Reload inventory to get updated data
+        // For optimistic updates, immediately update the item in local state
+        if ((response as any).pending) {
+          setItems((prev) =>
+            prev.map((item) =>
+              item.id === id
+                ? { ...item, ...data, updatedAt: new Date().toISOString() }
+                : item
+            )
+          );
+          await updatePendingOperationsCount();
+        } else {
+          await loadInventory(); // Reload inventory to get updated data
+        }
         return { success: true };
       } else {
         return {
@@ -205,13 +279,21 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       setError(null);
 
-      const response = await api.delete(
-        `/api/households/${currentHousehold.id}/inventory/${id}`
+      const response = await offlineApi.delete(
+        `/api/households/${currentHousehold.id}/inventory/${id}`,
+        { enableOptimisticUpdates: true }
       );
       const result = await response.json();
 
       if (result.success) {
-        await loadInventory(); // Reload inventory
+        // For optimistic updates, immediately remove the item from local state
+        if ((response as any).pending) {
+          setItems((prev) => prev.filter((item) => item.id !== id));
+          updateCategories(items.filter((item) => item.id !== id));
+          await updatePendingOperationsCount();
+        } else {
+          await loadInventory(); // Reload inventory
+        }
         return { success: true };
       } else {
         return {
@@ -224,6 +306,129 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: "Failed to delete item" };
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const syncData = async () => {
+    if (!currentHousehold || !isOnline) return;
+
+    try {
+      setIsLoading(true);
+
+      // Get fresh data from server
+      const response = await api.get(
+        `/api/households/${currentHousehold.id}/inventory`
+      );
+      const data = await response.json();
+
+      if (data.success) {
+        const serverData = data.data || [];
+
+        // Detect and resolve conflicts
+        const syncResult = await syncManager.syncData(
+          items,
+          serverData,
+          currentHousehold.id,
+          "inventory",
+          "merge" // Use merge strategy for inventory
+        );
+
+        if (syncResult.conflicts.length > 0) {
+          setConflicts(syncResult.conflicts);
+        } else {
+          // No conflicts, update with server data
+          setItems(serverData);
+          updateCategories(serverData);
+
+          // Update cache
+          const cacheKey = `inventory_${currentHousehold.id}`;
+          await storage.setCache(cacheKey, serverData);
+        }
+
+        // Process pending operations
+        await offlineApi.processPendingOperations();
+        await updatePendingOperationsCount();
+      }
+    } catch (error) {
+      console.error("Error syncing inventory data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resolveConflict = async (
+    conflictId: string,
+    resolution: "local" | "server" | "merge"
+  ) => {
+    const conflict = conflicts.find((c) => c.id === conflictId);
+    if (!conflict) return;
+
+    try {
+      let resolvedData;
+      switch (resolution) {
+        case "local":
+          resolvedData = await syncManager.resolveConflict(
+            conflict,
+            "client-wins"
+          );
+          break;
+        case "server":
+          resolvedData = await syncManager.resolveConflict(
+            conflict,
+            "server-wins"
+          );
+          break;
+        case "merge":
+          resolvedData = await syncManager.resolveConflict(
+            conflict,
+            "merge",
+            syncManager.mergeInventoryItem
+          );
+          break;
+      }
+
+      // Update the item in local state
+      setItems((prev) =>
+        prev.map((item) => (item.id === conflictId ? resolvedData : item))
+      );
+
+      // Remove the conflict
+      setConflicts((prev) => prev.filter((c) => c.id !== conflictId));
+
+      // Update the server with resolved data
+      if (isOnline) {
+        await api.put(
+          `/api/households/${currentHousehold?.id}/inventory/${conflictId}`,
+          resolvedData
+        );
+      }
+    } catch (error) {
+      console.error("Error resolving conflict:", error);
+    }
+  };
+
+  const clearOfflineData = async () => {
+    if (!currentHousehold) return;
+
+    try {
+      // Clear cache
+      const cacheKey = `inventory_${currentHousehold.id}`;
+      await storage.removeCache(cacheKey);
+
+      // Clear sync metadata
+      await syncManager.clearSyncData(currentHousehold.id);
+
+      // Clear pending operations
+      await offlineApi.clearPendingOperations();
+      await updatePendingOperationsCount();
+
+      // Clear conflicts
+      setConflicts([]);
+
+      // Reload data
+      await loadInventory();
+    } catch (error) {
+      console.error("Error clearing offline data:", error);
     }
   };
 
@@ -255,10 +460,16 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     error,
     searchQuery,
     selectedCategory,
+    isOnline,
+    pendingOperations,
+    conflicts,
     loadInventory,
     addItem,
     updateItem,
     deleteItem,
+    syncData,
+    resolveConflict,
+    clearOfflineData,
     setSearchQuery,
     setSelectedCategory,
     getFilteredItems,

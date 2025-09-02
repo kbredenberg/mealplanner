@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useApi } from "@/hooks/useApi";
+import { useOfflineApi } from "@/hooks/useOfflineApi";
 import { useHousehold } from "@/contexts/HouseholdContext";
 import { Recipe } from "@/contexts/RecipeContext";
+import { syncManager, SyncConflict } from "@/lib/syncManager";
+import { storage } from "@/lib/storage";
 
 export interface MealPlanItem {
   id: string;
@@ -44,6 +47,9 @@ interface MealPlanContextType {
   currentMealPlan: MealPlan | null;
   isLoading: boolean;
   error: string | null;
+  isOnline: boolean;
+  pendingOperations: number;
+  conflicts: SyncConflict[];
 
   // Data management
   loadMealPlan: (weekStart: string) => Promise<void>;
@@ -62,6 +68,14 @@ interface MealPlanContextType {
   markMealAsCooked: (
     mealItemId: string
   ) => Promise<{ success: boolean; error?: string }>;
+
+  // Offline support
+  syncData: () => Promise<void>;
+  resolveConflict: (
+    conflictId: string,
+    resolution: "local" | "server" | "merge"
+  ) => Promise<void>;
+  clearOfflineData: () => Promise<void>;
 
   // Ingredient availability checking
   checkIngredientAvailability: (
@@ -84,9 +98,13 @@ export function MealPlanProvider({ children }: { children: React.ReactNode }) {
   const [currentMealPlan, setCurrentMealPlan] = useState<MealPlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingOperations, setPendingOperations] = useState(0);
+  const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
 
   const api = useApi();
+  const offlineApi = useOfflineApi();
   const { currentHousehold } = useHousehold();
+  const { isOnline } = offlineApi;
 
   // Load current week's meal plan when household changes
   useEffect(() => {
@@ -349,15 +367,158 @@ export function MealPlanProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
+  const syncData = async () => {
+    if (!currentHousehold || !isOnline || !currentMealPlan) return;
+
+    try {
+      setIsLoading(true);
+
+      // Get fresh data from server
+      const response = await api.get(
+        `/api/households/${currentHousehold.id}/meal-plans?weekStart=${currentMealPlan.weekStart}`
+      );
+      const data = await response.json();
+
+      if (data.success) {
+        const serverData = data.data;
+
+        if (serverData) {
+          // Detect and resolve conflicts for meal plan items
+          const syncResult = await syncManager.syncData(
+            currentMealPlan.meals,
+            serverData.meals,
+            currentHousehold.id,
+            "meal-plan",
+            "merge" // Use merge strategy for meal plans
+          );
+
+          if (syncResult.conflicts.length > 0) {
+            setConflicts(syncResult.conflicts);
+          } else {
+            // No conflicts, update with server data
+            setCurrentMealPlan(serverData);
+
+            // Update cache
+            const cacheKey = `meal_plan_${currentHousehold.id}_${currentMealPlan.weekStart}`;
+            await storage.setCache(cacheKey, serverData);
+          }
+        }
+
+        // Process pending operations
+        await offlineApi.processPendingOperations();
+        await updatePendingOperationsCount();
+      }
+    } catch (error) {
+      console.error("Error syncing meal plan data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resolveConflict = async (
+    conflictId: string,
+    resolution: "local" | "server" | "merge"
+  ) => {
+    const conflict = conflicts.find((c) => c.id === conflictId);
+    if (!conflict || !currentMealPlan) return;
+
+    try {
+      let resolvedData;
+      switch (resolution) {
+        case "local":
+          resolvedData = await syncManager.resolveConflict(
+            conflict,
+            "client-wins"
+          );
+          break;
+        case "server":
+          resolvedData = await syncManager.resolveConflict(
+            conflict,
+            "server-wins"
+          );
+          break;
+        case "merge":
+          resolvedData = await syncManager.resolveConflict(
+            conflict,
+            "merge",
+            syncManager.mergeMealPlanItem
+          );
+          break;
+      }
+
+      // Update the meal item in local state
+      const updatedMealPlan = {
+        ...currentMealPlan,
+        meals: currentMealPlan.meals.map((meal) =>
+          meal.id === conflictId ? resolvedData : meal
+        ),
+      };
+      setCurrentMealPlan(updatedMealPlan);
+
+      // Remove the conflict
+      setConflicts((prev) => prev.filter((c) => c.id !== conflictId));
+
+      // Update the server with resolved data
+      if (isOnline) {
+        await api.put(
+          `/api/households/${currentHousehold?.id}/meal-plans/${currentMealPlan.id}/meals/${conflictId}`,
+          resolvedData
+        );
+      }
+    } catch (error) {
+      console.error("Error resolving conflict:", error);
+    }
+  };
+
+  const clearOfflineData = async () => {
+    if (!currentHousehold || !currentMealPlan) return;
+
+    try {
+      // Clear cache
+      const cacheKey = `meal_plan_${currentHousehold.id}_${currentMealPlan.weekStart}`;
+      await storage.removeCache(cacheKey);
+
+      // Clear sync metadata
+      await syncManager.clearSyncData(currentHousehold.id);
+
+      // Clear pending operations
+      await offlineApi.clearPendingOperations();
+      await updatePendingOperationsCount();
+
+      // Clear conflicts
+      setConflicts([]);
+
+      // Reload data
+      await loadMealPlan(currentMealPlan.weekStart);
+    } catch (error) {
+      console.error("Error clearing offline data:", error);
+    }
+  };
+
+  const updatePendingOperationsCount = async () => {
+    try {
+      const count = await offlineApi.getPendingOperationsCount();
+      setPendingOperations(count);
+    } catch (error) {
+      console.error("Error getting pending operations count:", error);
+    }
+  };
+
   const value: MealPlanContextType = {
     currentMealPlan,
     isLoading,
     error,
+    isOnline,
+    pendingOperations,
+    conflicts,
     loadMealPlan,
     createMealPlan,
     addMealToSlot,
     removeMealFromSlot,
     markMealAsCooked,
+    syncData,
+    resolveConflict,
+    clearOfflineData,
     checkIngredientAvailability,
     checkWeekAvailability,
     getMealsForDate,

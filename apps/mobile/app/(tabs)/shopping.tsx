@@ -17,6 +17,8 @@ import { useHousehold } from "@/contexts/HouseholdContext";
 import { ShoppingListItemCard } from "@/components/shopping/ShoppingListItemCard";
 import { AddEditShoppingItemModal } from "@/components/shopping/AddEditShoppingItemModal";
 import { ShoppingListFilters } from "@/components/shopping/ShoppingListFilters";
+import { OfflineStatusBar } from "@/components/OfflineStatusBar";
+import { ConflictResolutionModal } from "@/components/ConflictResolutionModal";
 
 export default function ShoppingScreen() {
   const {
@@ -31,6 +33,7 @@ export default function ShoppingScreen() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState<ShoppingListItem | null>(null);
+  const [showConflictsModal, setShowConflictsModal] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
@@ -255,6 +258,9 @@ export default function ShoppingScreen() {
     <ThemedView style={styles.container}>
       {renderHeader()}
 
+      {/* Offline Status Bar */}
+      <OfflineStatusBar onConflictsPress={() => setShowConflictsModal(true)} />
+
       {currentHousehold && <ShoppingListFilters />}
 
       {renderSelectionActions()}
@@ -287,6 +293,12 @@ export default function ShoppingScreen() {
         visible={showAddModal || editingItem !== null}
         onClose={handleCloseModal}
         item={editingItem}
+      />
+
+      {/* Conflict Resolution Modal */}
+      <ConflictResolutionModal
+        visible={showConflictsModal}
+        onClose={() => setShowConflictsModal(false)}
       />
     </ThemedView>
   );

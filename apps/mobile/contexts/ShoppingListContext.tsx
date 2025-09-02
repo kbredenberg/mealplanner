@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useApi } from "@/hooks/useApi";
+import { useOfflineApi } from "@/hooks/useOfflineApi";
 import { useHousehold } from "@/contexts/HouseholdContext";
+import { syncManager, SyncConflict } from "@/lib/syncManager";
+import { storage } from "@/lib/storage";
 
 export interface ShoppingListItem {
   id: string;
@@ -27,6 +30,9 @@ interface ShoppingListContextType {
   searchQuery: string;
   selectedCategory: string | null;
   showCompleted: boolean;
+  isOnline: boolean;
+  pendingOperations: number;
+  conflicts: SyncConflict[];
 
   // Data management
   loadShoppingList: () => Promise<void>;
@@ -55,6 +61,14 @@ interface ShoppingListContextType {
   convertToInventory: (
     itemIds?: string[]
   ) => Promise<{ success: boolean; error?: string; data?: any }>;
+
+  // Offline support
+  syncData: () => Promise<void>;
+  resolveConflict: (
+    conflictId: string,
+    resolution: "local" | "server" | "merge"
+  ) => Promise<void>;
+  clearOfflineData: () => Promise<void>;
 
   // Filtering and search
   setSearchQuery: (query: string) => void;
@@ -86,9 +100,13 @@ export function ShoppingListProvider({
   const [showCompleted, setShowCompleted] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
+  const [pendingOperations, setPendingOperations] = useState(0);
+  const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
 
   const api = useApi();
+  const offlineApi = useOfflineApi();
   const { currentHousehold } = useHousehold();
+  const { isOnline } = offlineApi;
 
   // Load shopping list when household changes
   useEffect(() => {
@@ -484,6 +502,138 @@ export function ShoppingListProvider({
     }
   };
 
+  const syncData = async () => {
+    if (!currentHousehold || !isOnline) return;
+
+    try {
+      setIsLoading(true);
+
+      // Get fresh data from server
+      const response = await api.get(
+        `/api/households/${currentHousehold.id}/shopping-list`
+      );
+      const data = await response.json();
+
+      if (data.success) {
+        const serverData = data.data || [];
+
+        // Detect and resolve conflicts
+        const syncResult = await syncManager.syncData(
+          items,
+          serverData,
+          currentHousehold.id,
+          "shopping-list",
+          "merge" // Use merge strategy for shopping list
+        );
+
+        if (syncResult.conflicts.length > 0) {
+          setConflicts(syncResult.conflicts);
+        } else {
+          // No conflicts, update with server data
+          setItems(serverData);
+          updateCategories(serverData);
+
+          // Update cache
+          const cacheKey = `shopping_list_${currentHousehold.id}`;
+          await storage.setCache(cacheKey, serverData);
+        }
+
+        // Process pending operations
+        await offlineApi.processPendingOperations();
+        await updatePendingOperationsCount();
+      }
+    } catch (error) {
+      console.error("Error syncing shopping list data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resolveConflict = async (
+    conflictId: string,
+    resolution: "local" | "server" | "merge"
+  ) => {
+    const conflict = conflicts.find((c) => c.id === conflictId);
+    if (!conflict) return;
+
+    try {
+      let resolvedData;
+      switch (resolution) {
+        case "local":
+          resolvedData = await syncManager.resolveConflict(
+            conflict,
+            "client-wins"
+          );
+          break;
+        case "server":
+          resolvedData = await syncManager.resolveConflict(
+            conflict,
+            "server-wins"
+          );
+          break;
+        case "merge":
+          resolvedData = await syncManager.resolveConflict(
+            conflict,
+            "merge",
+            syncManager.mergeShoppingListItem
+          );
+          break;
+      }
+
+      // Update the item in local state
+      setItems((prev) =>
+        prev.map((item) => (item.id === conflictId ? resolvedData : item))
+      );
+
+      // Remove the conflict
+      setConflicts((prev) => prev.filter((c) => c.id !== conflictId));
+
+      // Update the server with resolved data
+      if (isOnline) {
+        await api.put(
+          `/api/households/${currentHousehold?.id}/shopping-list/${conflictId}`,
+          resolvedData
+        );
+      }
+    } catch (error) {
+      console.error("Error resolving conflict:", error);
+    }
+  };
+
+  const clearOfflineData = async () => {
+    if (!currentHousehold) return;
+
+    try {
+      // Clear cache
+      const cacheKey = `shopping_list_${currentHousehold.id}`;
+      await storage.removeCache(cacheKey);
+
+      // Clear sync metadata
+      await syncManager.clearSyncData(currentHousehold.id);
+
+      // Clear pending operations
+      await offlineApi.clearPendingOperations();
+      await updatePendingOperationsCount();
+
+      // Clear conflicts
+      setConflicts([]);
+
+      // Reload data
+      await loadShoppingList();
+    } catch (error) {
+      console.error("Error clearing offline data:", error);
+    }
+  };
+
+  const updatePendingOperationsCount = async () => {
+    try {
+      const count = await offlineApi.getPendingOperationsCount();
+      setPendingOperations(count);
+    } catch (error) {
+      console.error("Error getting pending operations count:", error);
+    }
+  };
+
   const getFilteredItems = () => {
     let filtered = items;
 
@@ -525,6 +675,9 @@ export function ShoppingListProvider({
     searchQuery,
     selectedCategory,
     showCompleted,
+    isOnline,
+    pendingOperations,
+    conflicts,
     loadShoppingList,
     addItem,
     updateItem,
@@ -532,6 +685,9 @@ export function ShoppingListProvider({
     deleteItem,
     bulkOperation,
     convertToInventory,
+    syncData,
+    resolveConflict,
+    clearOfflineData,
     setSearchQuery,
     setSelectedCategory,
     setShowCompleted,

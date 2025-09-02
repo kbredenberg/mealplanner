@@ -90,7 +90,7 @@
   - Add meal cooking confirmation with inventory sync
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.2, 8.3_
 
-- [ ] 14. Add offline support and data synchronization
+- [x] 14. Add offline support and data synchronization
   - Implement local data caching for offline access
   - Create data synchronization when connectivity returns
   - Add optimistic updates for better user experience

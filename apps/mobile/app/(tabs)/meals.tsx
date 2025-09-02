@@ -4,12 +4,15 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { WeeklyMealPlan } from "@/components/meal-plan/WeeklyMealPlan";
 import { useMealPlan } from "@/contexts/MealPlanContext";
+import { OfflineStatusBar } from "@/components/OfflineStatusBar";
+import { ConflictResolutionModal } from "@/components/ConflictResolutionModal";
 
 export default function MealsScreen() {
   const { getCurrentWeekStart, getWeekDates } = useMealPlan();
   const [currentWeekStart, setCurrentWeekStart] = useState(
     getCurrentWeekStart()
   );
+  const [showConflictsModal, setShowConflictsModal] = useState(false);
 
   const navigateWeek = (direction: "prev" | "next") => {
     const current = new Date(currentWeekStart);
@@ -83,7 +86,16 @@ export default function MealsScreen() {
         </View>
       </View>
 
+      {/* Offline Status Bar */}
+      <OfflineStatusBar onConflictsPress={() => setShowConflictsModal(true)} />
+
       <WeeklyMealPlan weekStart={currentWeekStart} />
+
+      {/* Conflict Resolution Modal */}
+      <ConflictResolutionModal
+        visible={showConflictsModal}
+        onClose={() => setShowConflictsModal(false)}
+      />
     </ThemedView>
   );
 }

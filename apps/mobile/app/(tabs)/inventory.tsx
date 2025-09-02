@@ -14,6 +14,8 @@ import { useHousehold } from "@/contexts/HouseholdContext";
 import { InventoryItemCard } from "@/components/inventory/InventoryItemCard";
 import { AddEditItemModal } from "@/components/inventory/AddEditItemModal";
 import { InventoryFilters } from "@/components/inventory/InventoryFilters";
+import { OfflineStatusBar } from "@/components/OfflineStatusBar";
+import { ConflictResolutionModal } from "@/components/ConflictResolutionModal";
 
 export default function InventoryScreen() {
   const { currentHousehold } = useHousehold();
@@ -28,6 +30,7 @@ export default function InventoryScreen() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [showConflictsModal, setShowConflictsModal] = useState(false);
 
   const filteredItems = getFilteredItems();
 
@@ -126,6 +129,9 @@ export default function InventoryScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Offline Status Bar */}
+      <OfflineStatusBar onConflictsPress={() => setShowConflictsModal(true)} />
+
       {/* Filters */}
       <InventoryFilters />
 
@@ -147,6 +153,12 @@ export default function InventoryScreen() {
         visible={showAddModal || !!editingItem}
         onClose={handleCloseModal}
         item={editingItem}
+      />
+
+      {/* Conflict Resolution Modal */}
+      <ConflictResolutionModal
+        visible={showConflictsModal}
+        onClose={() => setShowConflictsModal(false)}
       />
     </ThemedView>
   );
