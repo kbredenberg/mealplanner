@@ -14,6 +14,7 @@ import { HouseholdProvider } from "@/contexts/HouseholdContext";
 import { InventoryProvider } from "@/contexts/InventoryContext";
 import { ShoppingListProvider } from "@/contexts/ShoppingListContext";
 import { RecipeProvider } from "@/contexts/RecipeContext";
+import { MealPlanProvider } from "@/contexts/MealPlanContext";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -32,47 +33,49 @@ export default function RootLayout() {
         <InventoryProvider>
           <ShoppingListProvider>
             <RecipeProvider>
-              <ThemeProvider
-                value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-              >
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    gestureEnabled: false, // Disable swipe gestures for better auth flow control
-                  }}
+              <MealPlanProvider>
+                <ThemeProvider
+                  value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
                 >
-                  <Stack.Screen
-                    name="index"
-                    options={{
+                  <Stack
+                    screenOptions={{
                       headerShown: false,
-                      gestureEnabled: false,
+                      gestureEnabled: false, // Disable swipe gestures for better auth flow control
                     }}
-                  />
-                  <Stack.Screen
-                    name="(tabs)"
-                    options={{
-                      headerShown: false,
-                      gestureEnabled: false,
-                    }}
-                  />
-                  <Stack.Screen
-                    name="auth"
-                    options={{
-                      headerShown: false,
-                      gestureEnabled: false,
-                    }}
-                  />
-                  <Stack.Screen
-                    name="household"
-                    options={{
-                      headerShown: false,
-                      gestureEnabled: true,
-                    }}
-                  />
-                  <Stack.Screen name="+not-found" />
-                </Stack>
-                <StatusBar style="auto" />
-              </ThemeProvider>
+                  >
+                    <Stack.Screen
+                      name="index"
+                      options={{
+                        headerShown: false,
+                        gestureEnabled: false,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="(tabs)"
+                      options={{
+                        headerShown: false,
+                        gestureEnabled: false,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="auth"
+                      options={{
+                        headerShown: false,
+                        gestureEnabled: false,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="household"
+                      options={{
+                        headerShown: false,
+                        gestureEnabled: true,
+                      }}
+                    />
+                    <Stack.Screen name="+not-found" />
+                  </Stack>
+                  <StatusBar style="auto" />
+                </ThemeProvider>
+              </MealPlanProvider>
             </RecipeProvider>
           </ShoppingListProvider>
         </InventoryProvider>
