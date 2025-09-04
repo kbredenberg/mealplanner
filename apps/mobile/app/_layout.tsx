@@ -15,6 +15,8 @@ import { InventoryProvider } from "@/contexts/InventoryContext";
 import { ShoppingListProvider } from "@/contexts/ShoppingListContext";
 import { RecipeProvider } from "@/contexts/RecipeContext";
 import { MealPlanProvider } from "@/contexts/MealPlanContext";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -28,58 +30,62 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <HouseholdProvider>
-        <InventoryProvider>
-          <ShoppingListProvider>
-            <RecipeProvider>
-              <MealPlanProvider>
-                <ThemeProvider
-                  value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-                >
-                  <Stack
-                    screenOptions={{
-                      headerShown: false,
-                      gestureEnabled: false, // Disable swipe gestures for better auth flow control
-                    }}
-                  >
-                    <Stack.Screen
-                      name="index"
-                      options={{
-                        headerShown: false,
-                        gestureEnabled: false,
-                      }}
-                    />
-                    <Stack.Screen
-                      name="(tabs)"
-                      options={{
-                        headerShown: false,
-                        gestureEnabled: false,
-                      }}
-                    />
-                    <Stack.Screen
-                      name="auth"
-                      options={{
-                        headerShown: false,
-                        gestureEnabled: false,
-                      }}
-                    />
-                    <Stack.Screen
-                      name="household"
-                      options={{
-                        headerShown: false,
-                        gestureEnabled: true,
-                      }}
-                    />
-                    <Stack.Screen name="+not-found" />
-                  </Stack>
-                  <StatusBar style="auto" />
-                </ThemeProvider>
-              </MealPlanProvider>
-            </RecipeProvider>
-          </ShoppingListProvider>
-        </InventoryProvider>
-      </HouseholdProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <AuthProvider>
+          <HouseholdProvider>
+            <InventoryProvider>
+              <ShoppingListProvider>
+                <RecipeProvider>
+                  <MealPlanProvider>
+                    <ThemeProvider
+                      value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+                    >
+                      <Stack
+                        screenOptions={{
+                          headerShown: false,
+                          gestureEnabled: false, // Disable swipe gestures for better auth flow control
+                        }}
+                      >
+                        <Stack.Screen
+                          name="index"
+                          options={{
+                            headerShown: false,
+                            gestureEnabled: false,
+                          }}
+                        />
+                        <Stack.Screen
+                          name="(tabs)"
+                          options={{
+                            headerShown: false,
+                            gestureEnabled: false,
+                          }}
+                        />
+                        <Stack.Screen
+                          name="auth"
+                          options={{
+                            headerShown: false,
+                            gestureEnabled: false,
+                          }}
+                        />
+                        <Stack.Screen
+                          name="household"
+                          options={{
+                            headerShown: false,
+                            gestureEnabled: true,
+                          }}
+                        />
+                        <Stack.Screen name="+not-found" />
+                      </Stack>
+                      <StatusBar style="auto" />
+                    </ThemeProvider>
+                  </MealPlanProvider>
+                </RecipeProvider>
+              </ShoppingListProvider>
+            </InventoryProvider>
+          </HouseholdProvider>
+        </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

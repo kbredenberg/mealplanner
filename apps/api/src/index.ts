@@ -12,6 +12,7 @@ import { shoppingListRoutes } from "./routes/shopping-list.js";
 import { recipeRoutes } from "./routes/recipes.js";
 import { mealPlanRoutes } from "./routes/meal-plans.js";
 import { wsManager } from "./lib/websocket.js";
+import { errorHandler } from "./lib/error-handler.js";
 import "./lib/hono-types.js";
 
 const app = new Hono();
@@ -74,6 +75,9 @@ app.get("/api/health", (c) => {
     },
   });
 });
+
+// Global error handler (must be last)
+app.onError(errorHandler());
 
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 

@@ -1,13 +1,11 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  TouchableOpacity,
 } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,43 +13,43 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Colors } from "@/constants/Colors";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { validateEmail, showAuthError } from "@/lib/auth-utils";
+import {
+  useFormValidation,
+  signInSchema,
+  type SignInFormData,
+} from "@/hooks/useFormValidation";
+import { useToast } from "@/components/ui/Toast";
+import FormField from "@/components/ui/FormField";
+import Button from "@/components/ui/Button";
 
 export default function SignInScreen() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuth();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
+  const toast = useToast();
 
-  const handleSignIn = async () => {
-    // Validation
-    if (!email.trim() || !password.trim()) {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
-    }
+  const { values, errors, isSubmitting, setValue, handleSubmit } =
+    useFormValidation<SignInFormData>({
+      schema: signInSchema,
+      onSubmit: async (data) => {
+        const result = await signIn(data.email, data.password);
 
-    if (!validateEmail(email.trim())) {
-      Alert.alert("Error", "Please enter a valid email address");
-      return;
-    }
+        if (result.success) {
+          toast.success("Welcome back!");
+          // Navigation will be handled by the auth context and routing
+        } else {
+          toast.error(result.error || "Sign in failed");
+          throw new Error(result.error || "Sign in failed");
+        }
+      },
+    });
 
-    setIsLoading(true);
+  const onSubmit = async () => {
     try {
-      const result = await signIn(email.trim(), password);
-
-      if (result.success) {
-        // Navigation will be handled by the auth context and routing
-        console.log("Sign in successful");
-      } else {
-        showAuthError(result.error, "Sign In Failed");
-      }
+      await handleSubmit();
     } catch (error) {
+      // Error is already handled by the form validation hook and toast
       console.error("Sign in error:", error);
-      showAuthError(error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -68,49 +66,38 @@ export default function SignInScreen() {
           </ThemedText>
 
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>Email</ThemedText>
-              <TextInput
-                style={[
-                  styles.input,
-                  { borderColor: colors.border, color: colors.text },
-                ]}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Enter your email"
-                placeholderTextColor={colors.tabIconDefault}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
+            <FormField
+              label="Email"
+              value={values.email || ""}
+              onChangeText={(text) => setValue("email", text)}
+              error={errors.email}
+              placeholder="Enter your email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              required
+            />
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>Password</ThemedText>
-              <TextInput
-                style={[
-                  styles.input,
-                  { borderColor: colors.border, color: colors.text },
-                ]}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor={colors.tabIconDefault}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
+            <FormField
+              label="Password"
+              value={values.password || ""}
+              onChangeText={(text) => setValue("password", text)}
+              error={errors.password}
+              placeholder="Enter your password"
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              required
+            />
 
-            <TouchableOpacity
-              style={[styles.button, { backgroundColor: colors.tint }]}
-              onPress={handleSignIn}
-              disabled={isLoading}
-            >
-              <ThemedText style={[styles.buttonText, { color: "#fff" }]}>
-                {isLoading ? "Signing In..." : "Sign In"}
-              </ThemedText>
-            </TouchableOpacity>
+            <Button
+              title="Sign In"
+              onPress={onSubmit}
+              loading={isSubmitting}
+              disabled={isSubmitting}
+              size="large"
+              containerStyle={styles.submitButton}
+            />
           </View>
 
           <View style={styles.footer}>
@@ -158,28 +145,8 @@ const styles = StyleSheet.create({
   form: {
     gap: 20,
   },
-  inputContainer: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 16,
-    fontSize: 16,
-  },
-  button: {
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
+  submitButton: {
     marginTop: 8,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: "600",
   },
   footer: {
     marginTop: 32,

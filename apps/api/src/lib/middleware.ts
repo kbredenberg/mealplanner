@@ -1,94 +1,76 @@
 import type { Context, Next } from "hono";
 import { auth, validateSession, type User, type Session } from "./auth.js";
 import type { ApiResponse } from "./types.js";
+import {
+  createAuthError,
+  createAuthzError,
+  ErrorCode,
+  asyncHandler,
+} from "./error-handler.js";
 
-export async function authMiddleware(c: Context, next: Next) {
-  try {
-    const headers = new Headers();
-    Object.entries(c.req.header()).forEach(([key, value]) => {
-      const headerValue = Array.isArray(value) ? value[0] : value;
-      if (headerValue) {
-        headers.set(key.toLowerCase(), headerValue);
-      }
-    });
-
-    const session = await validateSession(headers);
-
-    if (!session || !session.user) {
-      const response: ApiResponse = {
-        success: false,
-        error: "Authentication required",
-        code: "UNAUTHORIZED",
-      };
-      return c.json(response, 401);
+export const authMiddleware = asyncHandler(async (c: Context, next: Next) => {
+  const headers = new Headers();
+  Object.entries(c.req.header()).forEach(([key, value]) => {
+    const headerValue = Array.isArray(value) ? value[0] : value;
+    if (headerValue) {
+      headers.set(key.toLowerCase(), headerValue);
     }
+  });
 
-    // Validate session is not expired
-    if (session.session.expiresAt < new Date()) {
-      const response: ApiResponse = {
-        success: false,
-        error: "Session expired",
-        code: "SESSION_EXPIRED",
-      };
-      return c.json(response, 401);
-    }
+  const session = await validateSession(headers);
 
-    // Add session and user to context
-    c.set("session", session.session);
-    c.set("user", session.user);
-
-    await next();
-  } catch (error) {
-    console.error("Auth middleware error:", error);
-    const response: ApiResponse = {
-      success: false,
-      error: "Authentication failed",
-      code: "AUTH_ERROR",
-    };
-    return c.json(response, 500);
+  if (!session || !session.user) {
+    throw createAuthError("Authentication required", ErrorCode.UNAUTHORIZED);
   }
-}
 
-export async function optionalAuthMiddleware(c: Context, next: Next) {
-  try {
-    const headers = new Headers();
-    Object.entries(c.req.header()).forEach(([key, value]) => {
-      const headerValue = Array.isArray(value) ? value[0] : value;
-      if (headerValue) {
-        headers.set(key.toLowerCase(), headerValue);
+  // Validate session is not expired
+  if (session.session.expiresAt < new Date()) {
+    throw createAuthError("Session expired", ErrorCode.SESSION_EXPIRED);
+  }
+
+  // Add session and user to context
+  c.set("session", session.session);
+  c.set("user", session.user);
+
+  await next();
+});
+
+export const optionalAuthMiddleware = asyncHandler(
+  async (c: Context, next: Next) => {
+    try {
+      const headers = new Headers();
+      Object.entries(c.req.header()).forEach(([key, value]) => {
+        const headerValue = Array.isArray(value) ? value[0] : value;
+        if (headerValue) {
+          headers.set(key.toLowerCase(), headerValue);
+        }
+      });
+
+      const session = await validateSession(headers);
+
+      if (session && session.user && session.session.expiresAt >= new Date()) {
+        c.set("session", session.session);
+        c.set("user", session.user);
       }
-    });
-
-    const session = await validateSession(headers);
-
-    if (session && session.user && session.session.expiresAt >= new Date()) {
-      c.set("session", session.session);
-      c.set("user", session.user);
+    } catch (error) {
+      console.error("Optional auth middleware error:", error);
+      // Continue without authentication for optional auth
     }
 
-    await next();
-  } catch (error) {
-    console.error("Optional auth middleware error:", error);
-    // Continue without authentication for optional auth
     await next();
   }
-}
+);
 
 // Middleware to validate user has access to a household
-export async function householdAccessMiddleware(c: Context, next: Next) {
-  const user = c.get("user");
-  const householdId = c.req.param("householdId");
+export const householdAccessMiddleware = asyncHandler(
+  async (c: Context, next: Next) => {
+    const user = c.get("user");
+    const householdId = c.req.param("householdId");
 
-  if (!user || !householdId) {
-    const response: ApiResponse = {
-      success: false,
-      error: "Invalid request",
-      code: "INVALID_REQUEST",
-    };
-    return c.json(response, 400);
-  }
+    if (!user || !householdId) {
+      throw createAuthError("Invalid request", ErrorCode.INVALID_REQUEST);
+    }
 
-  try {
     const { prisma } = await import("./prisma.js");
 
     const membership = await prisma.householdMember.findUnique({
@@ -104,25 +86,15 @@ export async function householdAccessMiddleware(c: Context, next: Next) {
     });
 
     if (!membership) {
-      const response: ApiResponse = {
-        success: false,
-        error: "Access denied to household",
-        code: "HOUSEHOLD_ACCESS_DENIED",
-      };
-      return c.json(response, 403);
+      throw createAuthzError(
+        "Access denied to household",
+        ErrorCode.HOUSEHOLD_ACCESS_DENIED
+      );
     }
 
     c.set("household", membership.household);
     c.set("householdRole", membership.role);
 
     await next();
-  } catch (error) {
-    console.error("Household access middleware error:", error);
-    const response: ApiResponse = {
-      success: false,
-      error: "Failed to validate household access",
-      code: "HOUSEHOLD_ACCESS_ERROR",
-    };
-    return c.json(response, 500);
   }
-}
+);

@@ -98,11 +98,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(data));
         return { success: true };
       } else {
-        return { success: false, error: error?.message || "Sign in failed" };
+        const errorMessage = error?.message || "Sign in failed";
+        console.error("Sign in failed:", errorMessage);
+        return { success: false, error: errorMessage };
       }
     } catch (error) {
       console.error("Sign in error:", error);
-      return { success: false, error: "An unexpected error occurred" };
+      const errorMessage =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+      return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
     }
@@ -127,11 +131,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(data));
         return { success: true };
       } else {
-        return { success: false, error: error?.message || "Sign up failed" };
+        const errorMessage = error?.message || "Sign up failed";
+        console.error("Sign up failed:", errorMessage);
+        return { success: false, error: errorMessage };
       }
     } catch (error) {
       console.error("Sign up error:", error);
-      return { success: false, error: "An unexpected error occurred" };
+      const errorMessage =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+      return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
     }
@@ -142,7 +150,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
 
       if (session) {
-        await authClient.signOut();
+        try {
+          await authClient.signOut();
+        } catch (signOutError) {
+          console.error("Server sign out failed:", signOutError);
+          // Continue with local cleanup even if server request fails
+        }
       }
 
       setSession(null);
@@ -151,7 +164,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Sign out error:", error);
       // Even if the server request fails, clear local session
       setSession(null);
-      await SecureStore.deleteItemAsync(SESSION_KEY);
+      try {
+        await SecureStore.deleteItemAsync(SESSION_KEY);
+      } catch (storageError) {
+        console.error("Failed to clear session from storage:", storageError);
+      }
     } finally {
       setIsLoading(false);
     }
