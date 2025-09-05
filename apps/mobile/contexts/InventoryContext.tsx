@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useApi } from "@/hooks/useApi";
 import { useOfflineApi } from "@/hooks/useOfflineApi";
 import { useHousehold } from "@/contexts/HouseholdContext";
+import { useWebSocket, useWebSocketEvent } from "@/hooks/useWebSocket";
 import { syncManager, SyncConflict } from "@/lib/syncManager";
 import { storage } from "@/lib/storage";
 
@@ -32,6 +33,11 @@ interface InventoryContextType {
   isOnline: boolean;
   pendingOperations: number;
   conflicts: SyncConflict[];
+
+  // WebSocket connection
+  isConnected: boolean;
+  connectWebSocket: () => void;
+  disconnectWebSocket: () => void;
 
   // Data management
   loadInventory: () => Promise<void>;
@@ -86,6 +92,40 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
   const offlineApi = useOfflineApi();
   const { currentHousehold } = useHousehold();
   const { isOnline } = offlineApi;
+  const { isConnected, connect, disconnect } = useWebSocket({
+    householdId: currentHousehold?.id,
+    autoConnect: true,
+  });
+
+  // Handle real-time inventory updates
+  useWebSocketEvent(
+    "inventory:updated",
+    (data) => {
+      if (data.householdId === currentHousehold?.id) {
+        setItems((prev) => {
+          const existingIndex = prev.findIndex(
+            (item) => item.id === data.item.id
+          );
+          if (existingIndex >= 0) {
+            // Update existing item
+            const updated = [...prev];
+            updated[existingIndex] = data.item;
+            return updated;
+          } else {
+            // Add new item
+            return [data.item, ...prev];
+          }
+        });
+
+        // Update categories
+        setItems((currentItems) => {
+          updateCategories(currentItems);
+          return currentItems;
+        });
+      }
+    },
+    [currentHousehold?.id]
+  );
 
   // Load inventory when household changes
   useEffect(() => {
@@ -199,7 +239,10 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
           updateCategories([optimisticItem, ...items]);
           await updatePendingOperationsCount();
         } else {
-          await loadInventory(); // Reload inventory to get the new item
+          // Item will be updated via WebSocket, but fallback to reload if not connected
+          if (!isConnected) {
+            await loadInventory();
+          }
         }
         return { success: true };
       } else {
@@ -253,7 +296,10 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
           );
           await updatePendingOperationsCount();
         } else {
-          await loadInventory(); // Reload inventory to get updated data
+          // Item will be updated via WebSocket, but fallback to reload if not connected
+          if (!isConnected) {
+            await loadInventory();
+          }
         }
         return { success: true };
       } else {
@@ -292,7 +338,10 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
           updateCategories(items.filter((item) => item.id !== id));
           await updatePendingOperationsCount();
         } else {
-          await loadInventory(); // Reload inventory
+          // Item will be removed via WebSocket, but fallback to reload if not connected
+          if (!isConnected) {
+            await loadInventory();
+          }
         }
         return { success: true };
       } else {
@@ -463,6 +512,9 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     isOnline,
     pendingOperations,
     conflicts,
+    isConnected,
+    connectWebSocket: connect,
+    disconnectWebSocket: disconnect,
     loadInventory,
     addItem,
     updateItem,

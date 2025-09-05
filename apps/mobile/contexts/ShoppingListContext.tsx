@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useApi } from "@/hooks/useApi";
 import { useOfflineApi } from "@/hooks/useOfflineApi";
 import { useHousehold } from "@/contexts/HouseholdContext";
+import { useWebSocket, useWebSocketEvent } from "@/hooks/useWebSocket";
 import { syncManager, SyncConflict } from "@/lib/syncManager";
 import { storage } from "@/lib/storage";
 
@@ -98,8 +99,6 @@ export function ShoppingListProvider({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
-  const [ws, setWs] = useState<WebSocket | null>(null);
   const [pendingOperations, setPendingOperations] = useState(0);
   const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
 
@@ -107,137 +106,75 @@ export function ShoppingListProvider({
   const offlineApi = useOfflineApi();
   const { currentHousehold } = useHousehold();
   const { isOnline } = offlineApi;
+  const { isConnected, connect, disconnect } = useWebSocket({
+    householdId: currentHousehold?.id,
+    autoConnect: true,
+  });
+
+  // Handle real-time shopping list updates
+  useWebSocketEvent(
+    "shopping-list:item-added",
+    (data) => {
+      if (data.householdId === currentHousehold?.id) {
+        setItems((prev) => [data.item, ...prev]);
+        updateCategories([data.item, ...items]);
+      }
+    },
+    [currentHousehold?.id, items]
+  );
+
+  useWebSocketEvent(
+    "shopping-list:item-updated",
+    (data) => {
+      if (data.householdId === currentHousehold?.id) {
+        setItems((prev) =>
+          prev.map((item) => (item.id === data.item.id ? data.item : item))
+        );
+      }
+    },
+    [currentHousehold?.id]
+  );
+
+  useWebSocketEvent(
+    "shopping-list:item-completed",
+    (data) => {
+      if (data.householdId === currentHousehold?.id) {
+        setItems((prev) =>
+          prev.map((item) => (item.id === data.item.id ? data.item : item))
+        );
+      }
+    },
+    [currentHousehold?.id]
+  );
+
+  useWebSocketEvent(
+    "shopping-list:item-deleted",
+    (data) => {
+      if (data.householdId === currentHousehold?.id) {
+        setItems((prev) => prev.filter((item) => item.id !== data.itemId));
+        updateCategories(items.filter((item) => item.id !== data.itemId));
+      }
+    },
+    [currentHousehold?.id, items]
+  );
+
+  useWebSocketEvent(
+    "shopping-list:bulk-operation",
+    (data) => {
+      if (data.householdId === currentHousehold?.id) {
+        // Reload the shopping list after bulk operations
+        loadShoppingList();
+      }
+    },
+    [currentHousehold?.id]
+  );
 
   // Load shopping list when household changes
   useEffect(() => {
     if (currentHousehold) {
       loadShoppingList();
-      connectWebSocket();
-    } else {
-      disconnectWebSocket();
     }
-
-    return () => {
-      disconnectWebSocket();
-    };
   }, [currentHousehold]);
-
-  const connectWebSocket = () => {
-    if (!currentHousehold || ws) return;
-
-    try {
-      // Get the base URL and convert to WebSocket URL
-      const baseUrl = api.getBaseUrl();
-      const wsUrl = baseUrl
-        .replace(/^https:\/\//, "wss://")
-        .replace(/^http:\/\//, "ws://");
-
-      const websocket = new WebSocket(`${wsUrl}/ws`);
-
-      websocket.onopen = () => {
-        console.log("WebSocket connected");
-        setIsConnected(true);
-
-        // Subscribe to household updates
-        websocket.send(
-          JSON.stringify({
-            type: "subscribe-household",
-            householdId: currentHousehold.id,
-          })
-        );
-      };
-
-      websocket.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          handleWebSocketMessage(message);
-        } catch (error) {
-          console.error("Error parsing WebSocket message:", error);
-        }
-      };
-
-      websocket.onclose = () => {
-        console.log("WebSocket disconnected");
-        setIsConnected(false);
-        setWs(null);
-
-        // Attempt to reconnect after 3 seconds
-        setTimeout(() => {
-          if (currentHousehold) {
-            connectWebSocket();
-          }
-        }, 3000);
-      };
-
-      websocket.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        setIsConnected(false);
-      };
-
-      setWs(websocket);
-    } catch (error) {
-      console.error("Error connecting WebSocket:", error);
-    }
-  };
-
-  const disconnectWebSocket = () => {
-    if (ws) {
-      ws.close();
-      setWs(null);
-      setIsConnected(false);
-    }
-  };
-
-  const handleWebSocketMessage = (message: any) => {
-    if (!currentHousehold) return;
-
-    switch (message.type) {
-      case "shopping-list:item-added":
-        if (message.data.householdId === currentHousehold.id) {
-          setItems((prev) => [message.data.item, ...prev]);
-          updateCategories([message.data.item, ...items]);
-        }
-        break;
-
-      case "shopping-list:item-updated":
-      case "shopping-list:item-completed":
-        if (message.data.householdId === currentHousehold.id) {
-          setItems((prev) =>
-            prev.map((item) =>
-              item.id === message.data.item.id ? message.data.item : item
-            )
-          );
-        }
-        break;
-
-      case "shopping-list:item-deleted":
-        if (message.data.householdId === currentHousehold.id) {
-          setItems((prev) =>
-            prev.filter((item) => item.id !== message.data.itemId)
-          );
-          updateCategories(
-            items.filter((item) => item.id !== message.data.itemId)
-          );
-        }
-        break;
-
-      case "shopping-list:bulk-operation":
-        if (message.data.householdId === currentHousehold.id) {
-          // Reload the shopping list after bulk operations
-          loadShoppingList();
-        }
-        break;
-
-      case "connected":
-      case "subscribed":
-        console.log("WebSocket:", message.message || message.type);
-        break;
-
-      case "error":
-        console.error("WebSocket error:", message.message);
-        break;
-    }
-  };
 
   const loadShoppingList = async () => {
     if (!currentHousehold) return;
@@ -693,8 +630,8 @@ export function ShoppingListProvider({
     setShowCompleted,
     getFilteredItems,
     isConnected,
-    connectWebSocket,
-    disconnectWebSocket,
+    connectWebSocket: connect,
+    disconnectWebSocket: disconnect,
   };
 
   return (

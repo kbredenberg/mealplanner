@@ -4,6 +4,7 @@ import {
   householdAccessMiddleware,
 } from "../lib/middleware.js";
 import { prisma } from "../lib/prisma.js";
+import { wsManager } from "../lib/websocket.js";
 import type { ApiResponse, PaginatedResponse } from "../lib/types.js";
 import "../lib/hono-types.js";
 
@@ -300,6 +301,12 @@ inventoryRoutes.post(
           expiryDate,
           householdId: household.id,
         },
+      });
+
+      // Broadcast inventory update via WebSocket
+      wsManager.broadcastToHousehold(household.id, "inventory:updated", {
+        householdId: household.id,
+        item: inventoryItem,
       });
 
       const response: ApiResponse = {
@@ -617,6 +624,12 @@ inventoryRoutes.put(
         data: updateData,
       });
 
+      // Broadcast inventory update via WebSocket
+      wsManager.broadcastToHousehold(household.id, "inventory:updated", {
+        householdId: household.id,
+        item: updatedItem,
+      });
+
       const response: ApiResponse = {
         success: true,
         data: updatedItem,
@@ -684,6 +697,12 @@ inventoryRoutes.patch(
         },
       });
 
+      // Broadcast inventory update via WebSocket
+      wsManager.broadcastToHousehold(household.id, "inventory:updated", {
+        householdId: household.id,
+        item: updatedItem,
+      });
+
       const response: ApiResponse = {
         success: true,
         data: updatedItem,
@@ -735,6 +754,12 @@ inventoryRoutes.delete(
         where: {
           id: itemId,
         },
+      });
+
+      // Broadcast inventory update via WebSocket (item deleted)
+      wsManager.broadcastToHousehold(household.id, "inventory:updated", {
+        householdId: household.id,
+        item: { ...existingItem, quantity: 0 }, // Send the deleted item with quantity 0
       });
 
       const response: ApiResponse = {

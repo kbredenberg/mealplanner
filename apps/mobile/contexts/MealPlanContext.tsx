@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useApi } from "@/hooks/useApi";
 import { useOfflineApi } from "@/hooks/useOfflineApi";
 import { useHousehold } from "@/contexts/HouseholdContext";
+import { useWebSocket, useWebSocketEvent } from "@/hooks/useWebSocket";
 import { Recipe } from "@/contexts/RecipeContext";
 import { syncManager, SyncConflict } from "@/lib/syncManager";
 import { storage } from "@/lib/storage";
@@ -50,6 +51,11 @@ interface MealPlanContextType {
   isOnline: boolean;
   pendingOperations: number;
   conflicts: SyncConflict[];
+
+  // WebSocket connection
+  isConnected: boolean;
+  connectWebSocket: () => void;
+  disconnectWebSocket: () => void;
 
   // Data management
   loadMealPlan: (weekStart: string) => Promise<void>;
@@ -105,6 +111,85 @@ export function MealPlanProvider({ children }: { children: React.ReactNode }) {
   const offlineApi = useOfflineApi();
   const { currentHousehold } = useHousehold();
   const { isOnline } = offlineApi;
+  const { isConnected, connect, disconnect } = useWebSocket({
+    householdId: currentHousehold?.id,
+    autoConnect: true,
+  });
+
+  // Handle real-time meal plan updates
+  useWebSocketEvent(
+    "meal-plan:updated",
+    (data) => {
+      if (
+        data.householdId === currentHousehold?.id &&
+        currentMealPlan?.id === data.mealPlanId
+      ) {
+        switch (data.action) {
+          case "added":
+            if (data.meal) {
+              setCurrentMealPlan((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      meals: [...prev.meals, data.meal],
+                    }
+                  : null
+              );
+            }
+            break;
+          case "updated":
+            if (data.meal) {
+              setCurrentMealPlan((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      meals: prev.meals.map((meal) =>
+                        meal.id === data.meal.id ? data.meal : meal
+                      ),
+                    }
+                  : null
+              );
+            }
+            break;
+          case "deleted":
+            if (data.mealId) {
+              setCurrentMealPlan((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      meals: prev.meals.filter(
+                        (meal) => meal.id !== data.mealId
+                      ),
+                    }
+                  : null
+              );
+            }
+            break;
+          case "cooked":
+            if (data.meal) {
+              setCurrentMealPlan((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      meals: prev.meals.map((meal) =>
+                        meal.id === data.meal.id
+                          ? {
+                              ...meal,
+                              cooked: true,
+                              cookedAt: data.meal.cookedAt,
+                            }
+                          : meal
+                      ),
+                    }
+                  : null
+              );
+            }
+            break;
+        }
+      }
+    },
+    [currentHousehold?.id, currentMealPlan?.id]
+  );
 
   // Load current week's meal plan when household changes
   useEffect(() => {
@@ -223,8 +308,10 @@ export function MealPlanProvider({ children }: { children: React.ReactNode }) {
       const result = await response.json();
 
       if (result.success) {
-        // Reload the meal plan to get updated data
-        await loadMealPlan(currentMealPlan.weekStart);
+        // Meal will be added via WebSocket, but fallback to reload if not connected
+        if (!isConnected) {
+          await loadMealPlan(currentMealPlan.weekStart);
+        }
         return { success: true };
       } else {
         return {
@@ -255,8 +342,10 @@ export function MealPlanProvider({ children }: { children: React.ReactNode }) {
       const result = await response.json();
 
       if (result.success) {
-        // Reload the meal plan to get updated data
-        await loadMealPlan(currentMealPlan.weekStart);
+        // Meal will be removed via WebSocket, but fallback to reload if not connected
+        if (!isConnected) {
+          await loadMealPlan(currentMealPlan.weekStart);
+        }
         return { success: true };
       } else {
         return {
@@ -287,8 +376,10 @@ export function MealPlanProvider({ children }: { children: React.ReactNode }) {
       const result = await response.json();
 
       if (result.success) {
-        // Reload the meal plan to get updated data
-        await loadMealPlan(currentMealPlan.weekStart);
+        // Meal will be updated via WebSocket, but fallback to reload if not connected
+        if (!isConnected) {
+          await loadMealPlan(currentMealPlan.weekStart);
+        }
         return { success: true };
       } else {
         return {
@@ -511,6 +602,9 @@ export function MealPlanProvider({ children }: { children: React.ReactNode }) {
     isOnline,
     pendingOperations,
     conflicts,
+    isConnected,
+    connectWebSocket: connect,
+    disconnectWebSocket: disconnect,
     loadMealPlan,
     createMealPlan,
     addMealToSlot,
