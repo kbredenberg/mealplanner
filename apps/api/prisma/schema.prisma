@@ -28,6 +28,8 @@ model User {
   recipes           Recipe[]
   createdHouseholds Household[]       @relation("HouseholdCreator")
 
+  @@index([email])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -48,6 +50,8 @@ model Household {
   mealPlans    MealPlan[]
   invites      HouseholdInvite[]
 
+  @@index([creatorId])
+  @@index([createdAt])
   @@map("households")
 }
 
@@ -63,6 +67,10 @@ model HouseholdMember {
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
   @@unique([userId, householdId])
+  @@index([userId])
+  @@index([householdId])
+  @@index([role])
+  @@index([householdId, role])
   @@map("household_members")
 }
 
@@ -78,6 +86,10 @@ model HouseholdInvite {
   // Relationships
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
+  @@index([email])
+  @@index([householdId])
+  @@index([status])
+  @@index([expiresAt])
   @@map("household_invites")
 }
 
@@ -97,6 +109,12 @@ model InventoryItem {
   household         Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
   recipeIngredients RecipeIngredient[]
 
+  @@index([householdId])
+  @@index([category])
+  @@index([name])
+  @@index([expiryDate])
+  @@index([updatedAt])
+  @@index([householdId, category])
   @@map("inventory_items")
 }
 
@@ -114,6 +132,11 @@ model ShoppingListItem {
   // Relationships
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
+  @@index([householdId])
+  @@index([completed])
+  @@index([category])
+  @@index([updatedAt])
+  @@index([householdId, completed])
   @@map("shopping_list_items")
 }
 
@@ -136,6 +159,10 @@ model Recipe {
   ingredients   RecipeIngredient[]
   mealPlanItems MealPlanItem[]
 
+  @@index([creatorId])
+  @@index([name])
+  @@index([tags])
+  @@index([createdAt])
   @@map("recipes")
 }
 
@@ -151,6 +178,8 @@ model RecipeIngredient {
   recipe        Recipe         @relation(fields: [recipeId], references: [id])
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
 
+  @@index([recipeId])
+  @@index([inventoryItemId])
   @@map("recipe_ingredients")
 }
 
@@ -167,6 +196,9 @@ model MealPlan {
   household Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
   meals     MealPlanItem[]
 
+  @@index([householdId])
+  @@index([weekStart])
+  @@index([weekEnd])
   @@map("meal_plans")
 }
 
@@ -184,6 +216,12 @@ model MealPlanItem {
   mealPlan MealPlan @relation(fields: [mealPlanId], references: [id])
   recipe   Recipe?  @relation(fields: [recipeId], references: [id])
 
+  @@index([mealPlanId])
+  @@index([recipeId])
+  @@index([date])
+  @@index([mealType])
+  @@index([cooked])
+  @@index([date, mealType])
   @@map("meal_plan_items")
 }
 

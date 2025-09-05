@@ -11,8 +11,15 @@ import { inventoryRoutes } from "./routes/inventory.js";
 import { shoppingListRoutes } from "./routes/shopping-list.js";
 import { recipeRoutes } from "./routes/recipes.js";
 import { mealPlanRoutes } from "./routes/meal-plans.js";
+import healthRoutes from "./routes/health.js";
 import { wsManager } from "./lib/websocket.js";
 import { errorHandler } from "./lib/error-handler.js";
+// import {
+//   setupSecurity,
+//   requestLogger,
+//   errorBoundary,
+// } from "./lib/security-middleware.js";
+// import { config } from "./lib/config.js";
 import "./lib/hono-types.js";
 
 const app = new Hono();
@@ -32,6 +39,7 @@ app.use(
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   })
 );
+}
 
 // Better Auth routes (handles /api/auth/sign-in, /api/auth/sign-up, etc.)
 app.on(["POST", "GET"], "/api/auth/**", (c) => {
@@ -59,20 +67,17 @@ app.route("/api/recipes", recipeRoutes);
 // Meal planning routes
 app.route("/api/households", mealPlanRoutes);
 
-// Health check
-app.get("/", (c) => {
-  return c.json({ message: "Meal Planner API is running!" });
-});
+// Health check routes
+app.route("/health", healthRoutes);
+app.route("/api/health", healthRoutes);
 
-// API health check
-app.get("/api/health", (c) => {
+// Root endpoint
+app.get("/", (c) => {
   return c.json({
-    status: "ok",
+    message: "Meal Planner API is running!",
+    version: process.env.npm_package_version || "1.0.0",
+    environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString(),
-    services: {
-      database: "connected",
-      auth: "configured",
-    },
   });
 });
 
