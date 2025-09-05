@@ -37,28 +37,31 @@ export function useFormValidation<T extends Record<string, any>>({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const setValue = useCallback((field: keyof T, value: any) => {
-    setValuesState(prev => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
-    if (errors[field as string]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[field as string];
-        return newErrors;
-      });
-    }
-  }, [errors]);
+  const setValue = useCallback(
+    (field: keyof T, value: any) => {
+      setValuesState((prev) => ({ ...prev, [field]: value }));
+      // Clear error when user starts typing
+      if (errors[field as string]) {
+        setErrors((prev) => {
+          const newErrors = { ...prev };
+          delete newErrors[field as string];
+          return newErrors;
+        });
+      }
+    },
+    [errors]
+  );
 
   const setValues = useCallback((newValues: Partial<T>) => {
-    setValuesState(prev => ({ ...prev, ...newValues }));
+    setValuesState((prev) => ({ ...prev, ...newValues }));
   }, []);
 
   const setError = useCallback((field: keyof T, message: string) => {
-    setErrors(prev => ({ ...prev, [field as string]: message }));
+    setErrors((prev) => ({ ...prev, [field as string]: message }));
   }, []);
 
   const clearError = useCallback((field: keyof T) => {
-    setErrors(prev => {
+    setErrors((prev) => {
       const newErrors = { ...prev };
       delete newErrors[field as string];
       return newErrors;
@@ -69,25 +72,33 @@ export function useFormValidation<T extends Record<string, any>>({
     setErrors({});
   }, []);
 
-  const validateField = useCallback((field: keyof T): boolean => {
-    try {
-      // Create a partial schema for the specific field
-      const fieldSchema = schema.pick({ [field]: true } as any);
-      fieldSchema.parse({ [field]: values[field] });
-      clearError(field);
-      return true;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const fieldError = error.errors.find(err => err.path.includes(field as string));
-        if (fieldError) {
-          setError(field, fieldError.message);
+  const validateField = useCallback(
+    (field: keyof T): boolean => {
+      try {
+        // Validate the entire form and check for errors on this specific field
+        schema.parse(values);
+        clearError(field);
+        return true;
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          const fieldError = error.errors.find((err) =>
+            err.path.includes(field as string)
+          );
+          if (fieldError) {
+            setError(field, fieldError.message);
+            return false;
+          }
+          // If no error for this field, clear any existing error
+          clearError(field);
+          return true;
         }
+        return false;
       }
-      return false;
-    }
-  }, [values, schema, setError, clearError]);
+    },
+    [values, schema, setError, clearError]
+  );
 
-  const validateForm = useCallback(): boolean => {
+  const validateForm = useCallback(() => {
     try {
       schema.parse(values);
       clearErrors();
@@ -95,7 +106,7 @@ export function useFormValidation<T extends Record<string, any>>({
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: Record<string, string> = {};
-        error.errors.forEach(err => {
+        error.errors.forEach((err) => {
           const field = err.path.join(".");
           newErrors[field] = err.message;
         });
@@ -122,9 +133,11 @@ export function useFormValidation<T extends Record<string, any>>({
           // Set server-side validation errors
           const serverErrors: Record<string, string> = {};
           Object.entries(apiError.details).forEach(([field, messages]) => {
-            serverErrors[field] = Array.isArray(messages) ? messages[0] : messages as string;
+            serverErrors[field] = Array.isArray(messages)
+              ? messages[0]
+              : (messages as string);
           });
-          setErrors(prev => ({ ...prev, ...serverErrors }));
+          setErrors((prev) => ({ ...prev, ...serverErrors }));
         }
       }
       throw error; // Re-throw so the component can handle it
@@ -139,7 +152,8 @@ export function useFormValidation<T extends Record<string, any>>({
     setIsSubmitting(false);
   }, [initialValues]);
 
-  const isValid = Object.keys(errors).length === 0 && Object.keys(values).length > 0;
+  const isValid =
+    Object.keys(errors).length === 0 && Object.keys(values).length > 0;
 
   return {
     values,
@@ -163,12 +177,24 @@ export const validationSchemas = {
   email: z.string().email("Please enter a valid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   name: z.string().min(1, "Name is required").max(100, "Name is too long"),
-  householdName: z.string().min(1, "Household name is required").max(100, "Name is too long"),
-  itemName: z.string().min(1, "Item name is required").max(100, "Name is too long"),
+  householdName: z
+    .string()
+    .min(1, "Household name is required")
+    .max(100, "Name is too long"),
+  itemName: z
+    .string()
+    .min(1, "Item name is required")
+    .max(100, "Name is too long"),
   quantity: z.number().min(0, "Quantity cannot be negative"),
   unit: z.string().min(1, "Unit is required").max(20, "Unit is too long"),
-  category: z.string().min(1, "Category is required").max(50, "Category is too long"),
-  recipeName: z.string().min(1, "Recipe name is required").max(100, "Name is too long"),
+  category: z
+    .string()
+    .min(1, "Category is required")
+    .max(50, "Category is too long"),
+  recipeName: z
+    .string()
+    .min(1, "Recipe name is required")
+    .max(100, "Name is too long"),
   instructions: z.string().min(1, "Instructions are required"),
   prepTime: z.number().int().min(0, "Prep time cannot be negative").optional(),
   cookTime: z.number().int().min(0, "Cook time cannot be negative").optional(),
@@ -215,17 +241,25 @@ export const createRecipeSchema = z.object({
   cookTime: validationSchemas.cookTime,
   servings: validationSchemas.servings,
   tags: z.array(z.string()).default([]),
-  ingredients: z.array(z.object({
-    name: z.string().min(1, "Ingredient name is required"),
-    quantity: z.number().min(0, "Quantity cannot be negative"),
-    unit: z.string().min(1, "Unit is required"),
-    notes: z.string().optional(),
-  })).min(1, "At least one ingredient is required"),
+  ingredients: z
+    .array(
+      z.object({
+        name: z.string().min(1, "Ingredient name is required"),
+        quantity: z.number().min(0, "Quantity cannot be negative"),
+        unit: z.string().min(1, "Unit is required"),
+        notes: z.string().optional(),
+      })
+    )
+    .min(1, "At least one ingredient is required"),
 });
 
 export type SignInFormData = z.infer<typeof signInSchema>;
 export type SignUpFormData = z.infer<typeof signUpSchema>;
 export type CreateHouseholdFormData = z.infer<typeof createHouseholdSchema>;
-export type CreateInventoryItemFormData = z.infer<typeof createInventoryItemSchema>;
-export type CreateShoppingItemFormData = z.infer<typeof createShoppingItemSchema>;
+export type CreateInventoryItemFormData = z.infer<
+  typeof createInventoryItemSchema
+>;
+export type CreateShoppingItemFormData = z.infer<
+  typeof createShoppingItemSchema
+>;
 export type CreateRecipeFormData = z.infer<typeof createRecipeSchema>;

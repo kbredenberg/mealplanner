@@ -52,7 +52,8 @@
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
     "react-native-web": "~0.20.0",
-    "react-native-webview": "13.13.5"
+    "react-native-webview": "13.13.5",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -66,8 +67,7 @@
     "jest-expo": "~52.0.2",
     "react-native-bundle-visualizer": "^3.1.0",
     "react-test-renderer": "19.0.0",
-    "typescript": "~5.8.3",
-    "zod": "^3.24.1"
+    "typescript": "~5.8.3"
   },
   "private": true
 }
